@@ -126,3 +126,28 @@ for(i in 1:nrow(dwd.phen2)) {
   print(paste(out,i))
   
 }
+
+# Metadata ----------------------------------------------------------------
+# Crops
+
+# List of metadata files
+crop.stations<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/crops/historical/PH_Beschreibung_Phaenologie_Stationen_Jahresmelder.txt"
+crop.phases<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/crops/historical/PH_Beschreibung_Phasendefinition_Jahresmelder_Landwirtschaft_Kulturpflanze.txt"
+fruit.stations<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/fruit/historical/PH_Beschreibung_Phaenologie_Stationen_Jahresmelder.txt"
+fruit.phases<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/fruit/historical/PH_Beschreibung_Phasendefinition_Jahresmelder_Obst.txt"
+
+meta.crops<-bind_cols(Type="Crop",L2_URL=c(crop.stations,crop.phases),Output="DWDdata/Phenology/crops/")
+meta.fruit<-bind_cols(Type="Fruit",L2_URL=c(fruit.stations,fruit.phases),Output="DWDdata/Phenology/fruit/")
+
+# Tidy and Output
+meta<-bind_rows(meta.crops,meta.fruit) %>% 
+  mutate(Output2=paste0(Output,basename(L2_URL))) %>%
+  mutate(Output2=gsub(".txt", ".csv", Output2)) %>% 
+  mutate(data=map(L2_URL,function(x) read.table(x, sep=";", header=TRUE))) 
+  
+# Download
+for(i in 1:nrow(meta)) write.csv(meta$data[i],meta$Output2[i])
+
+
+
+
