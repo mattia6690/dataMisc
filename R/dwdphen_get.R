@@ -12,6 +12,7 @@ library("tidyverse")
 hst.dir  <- bind_cols(Timeframe=c("recent","historical"),Dir=c("DWDdata/Phenology/recent/","DWDdata/Phenology/historical/"))
 rec.dir  <- "DWDdata/Phenology/recent/"
 ts.dir   <- "DWDdata/Phenology/timeseries/"
+meta.dir <- "DWDdata/Phenology/metadata/"
 
 # Levels in the FTP server
 base<-sub("climate$", "phenology", dwdbase)
@@ -52,6 +53,9 @@ dwd.phen.urls<-dwd.phen.url %>%
     classes<-sapply(pagetext.melder.sub,function(x){croptype<-string.sel.eng[str_detect(x,string.sel)]})
     binder<- unnest(enframe(classes,name="L2_name","Type2"),cols = c(Type2))
     
+    
+    
+    
     return(binder)
     
   })) %>% 
@@ -71,7 +75,6 @@ dwd.phen<-dwd.phen[-which(str_detect(dwd.phen$L2_URL,"Spezifizierung")),]
 # Create the Directories if not present already
 uout<-unique(dirname(dwd.phen$Output))
 s<-sapply(uout,function(x) dir.create(x,recursive=T,showWarnings = F))
-
 
 # Download ----------------------------------------------------------------
 
@@ -98,9 +101,27 @@ for(i in 1:nrow(dwd.phen)){
 }
 
 
+# Metadata ----------------------------------------------------------------
+# Crops
+
+# List of metadata files
+crop.stations<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/crops/historical/PH_Beschreibung_Phaenologie_Stationen_Jahresmelder.txt"
+crop.phases<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/crops/historical/PH_Beschreibung_Phasendefinition_Jahresmelder_Landwirtschaft_Kulturpflanze.txt"
+fruit.stations<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/fruit/historical/PH_Beschreibung_Phaenologie_Stationen_Jahresmelder.txt"
+fruit.phases<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/fruit/historical/PH_Beschreibung_Phasendefinition_Jahresmelder_Obst.txt"
+
+meta.crops<-bind_cols(Type1="crops",Type2=c("Stations","Phases"),L2_URL=c(crop.stations,crop.phases))
+meta.fruit<-bind_cols(Type1="fruit",Type2=c("Stations","Phases"),L2_URL=c(fruit.stations,fruit.phases))
+
+# Tidy and Output
+meta<-bind_rows(meta.crops,meta.fruit) %>% 
+  mutate(Output=paste0(meta.dir,Type1,"_",Type2,".csv")) %>% 
+  mutate(data=map(L2_URL,function(x) read.table(x, sep=";", header=TRUE)))
+
+# Download
+for(i in 1:nrow(meta)) write.csv(meta$data[i],meta$Output[i])
 
 # TimeSeries --------------------------------------------------------------------
-
 # Tidy the timeseries
 dwd.phen2<-dwd.phen %>% 
   select(Type1,Type2,Output) %>% 
@@ -112,41 +133,45 @@ for(i in 1:nrow(dwd.phen2)) {
   # Read
   
   l<-lapply(dwd.phen2$dataRaw[[i]]$Output, function(x) read.table(x, sep=";", header=TRUE))
+  
+  
   #l<-suppressMessages(lapply(dwd.phen2$dataRaw[[i]]$Output, read_csv2))
   lbind<-unique(do.call(bind_rows,l))
   lbind.sort<-arrange(lbind,Stations_id,Eintrittsdatum) %>% 
-    mutate(Croptype=dwd.phen2$Type2[i])
+    mutate(Croptype=dwd.phen2$Type2[i]) %>% 
+    as_tibble %>% 
+    select(-c(eor,X,Eintrittsdatum_QB))
+  
+  
+  # Add metadata
+  stations<-read.csv(paste0("DWDdata/Phenology/metadata/",dwd.phen2$Type1[i],"_Stations.csv")) %>% 
+    as_tibble %>% 
+    mutate(Stationsname=trimws(Stationsname)) %>% 
+    mutate(Bundesland=trimws(Bundesland)) %>% 
+    select(Stations_id,Stationsname,Lat="geograph.Breite",Lon="geograph.Laenge",Bundesland) %>% 
+    unique
+  
+  phases<-read.csv(paste0("DWDdata/Phenology/metadata/",dwd.phen2$Type1[i],"_Phases.csv")) %>% 
+    as_tibble %>% 
+    mutate(Objekt=trimws(Objekt)) %>% 
+    mutate(Phase=trimws(Phase)) %>% 
+    select(Objekt_id,Objekt,Phase_id=Phasen_id,Phase,BBCH_Code) %>% 
+    unique
+  
+  lj1<-left_join(lbind.sort,stations, by = "Stations_id")
+  lj2<-left_join(lj1,phases, by = c("Objekt_id","Phase_id"))
   
   # Download
   out<-paste0(ts.dir,dwd.phen2$Type2[i],"_timeseries_",format(Sys.Date(),"%Y%m%d"),".csv")
-  write_csv(lbind.sort,out)
+  write_csv(lj2,out)
   
   # Housekeeping
-  rm(l,lbind,lbind.sort)
+  rm(l,lbind,lbind.sort,lj2)
   print(paste(out,i))
   
 }
 
-# Metadata ----------------------------------------------------------------
-# Crops
 
-# List of metadata files
-crop.stations<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/crops/historical/PH_Beschreibung_Phaenologie_Stationen_Jahresmelder.txt"
-crop.phases<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/crops/historical/PH_Beschreibung_Phasendefinition_Jahresmelder_Landwirtschaft_Kulturpflanze.txt"
-fruit.stations<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/fruit/historical/PH_Beschreibung_Phaenologie_Stationen_Jahresmelder.txt"
-fruit.phases<-"ftp://opendata.dwd.de/climate_environment/CDC/observations_germany/phenology/annual_reporters/fruit/historical/PH_Beschreibung_Phasendefinition_Jahresmelder_Obst.txt"
-
-meta.crops<-bind_cols(Type="Crop",L2_URL=c(crop.stations,crop.phases),Output="DWDdata/Phenology/crops/")
-meta.fruit<-bind_cols(Type="Fruit",L2_URL=c(fruit.stations,fruit.phases),Output="DWDdata/Phenology/fruit/")
-
-# Tidy and Output
-meta<-bind_rows(meta.crops,meta.fruit) %>% 
-  mutate(Output2=paste0(Output,basename(L2_URL))) %>%
-  mutate(Output2=gsub(".txt", ".csv", Output2)) %>% 
-  mutate(data=map(L2_URL,function(x) read.table(x, sep=";", header=TRUE))) 
-  
-# Download
-for(i in 1:nrow(meta)) write.csv(meta$data[i],meta$Output2[i])
 
 
 
