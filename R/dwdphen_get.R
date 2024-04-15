@@ -116,7 +116,19 @@ meta.fruit<-bind_cols(Type1="fruit",Type2=c("Stations","Phases"),L2_URL=c(fruit.
 # Tidy and Output
 meta<-bind_rows(meta.crops,meta.fruit) %>% 
   mutate(Output=paste0(meta.dir,Type1,"_",Type2,".csv")) %>% 
-  mutate(data=map(L2_URL,function(x) read.table(x, sep=";", header=TRUE)))
+  mutate(data=map2(L2_URL,Type2,function(x,y) {
+    
+    # Read and delete White spaces
+    tib<-as_tibble(read.table(x, sep=";", header=TRUE))
+    tib2<-mutate_if(tib,is.character, trimws)
+    
+    # Select the right columns
+    if(y=="Stations") ret<-select(tib2,Stations_id,Stationsname,Lat="geograph.Breite",Lon="geograph.Laenge",Bundesland) 
+    if(y=="Phases") ret<-select(tib2,Objekt_id,Objekt,Phase_id=Phasen_id,Phase,BBCH_Code)
+    
+    return(unique(ret))
+    
+    }))
 
 # Download
 for(i in 1:nrow(meta)) write.csv(meta$data[i],meta$Output[i])
@@ -131,7 +143,6 @@ dwd.phen2<-dwd.phen %>%
 for(i in 1:nrow(dwd.phen2)) {
   
   # Read
-  
   l<-lapply(dwd.phen2$dataRaw[[i]]$Output, function(x) read.table(x, sep=";", header=TRUE))
   
   
@@ -144,19 +155,8 @@ for(i in 1:nrow(dwd.phen2)) {
   
   
   # Add metadata
-  stations<-read.csv(paste0("DWDdata/Phenology/metadata/",dwd.phen2$Type1[i],"_Stations.csv")) %>% 
-    as_tibble %>% 
-    mutate(Stationsname=trimws(Stationsname)) %>% 
-    mutate(Bundesland=trimws(Bundesland)) %>% 
-    select(Stations_id,Stationsname,Lat="geograph.Breite",Lon="geograph.Laenge",Bundesland) %>% 
-    unique
-  
-  phases<-read.csv(paste0("DWDdata/Phenology/metadata/",dwd.phen2$Type1[i],"_Phases.csv")) %>% 
-    as_tibble %>% 
-    mutate(Objekt=trimws(Objekt)) %>% 
-    mutate(Phase=trimws(Phase)) %>% 
-    select(Objekt_id,Objekt,Phase_id=Phasen_id,Phase,BBCH_Code) %>% 
-    unique
+  stations<-read.csv(paste0("DWDdata/Phenology/metadata/",dwd.phen2$Type1[i],"_Stations.csv"))
+  phases<-read.csv(paste0("DWDdata/Phenology/metadata/",dwd.phen2$Type1[i],"_Phases.csv"))
   
   lj1<-left_join(lbind.sort,stations, by = "Stations_id")
   lj2<-left_join(lj1,phases, by = c("Objekt_id","Phase_id"))
