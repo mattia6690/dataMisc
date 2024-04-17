@@ -8,20 +8,19 @@ library("ggpubr")
 
 nuts_DE0<-gisco_get_countries(country="DE")
 phenfiles<-list.files("DWDdata/Phenology/timeseries/",full.names=T)
-refyear<-2023
+refyear<-2024
 
 
 for(i in 1:length(phenfiles)){
   
-  cfile<-read_csv(phenfiles[i],show_col_types = FALSE) %>% 
+  cfile<-read.csv(phenfiles[i]) %>% 
     mutate(Phase_id=sprintf("%02d",Phase_id)) %>% 
-    filter(!is.na(Lat)& !is.na(Lon)) %>% 
-    mutate(NewPhase=paste(Phase_id,Phase,sep="-")) %>% 
+    filter(!is.na(Lat)& !is.na(Lon))  %>% 
     st_as_sf(coords=c("Lon","Lat"),crs=4326)
   
   # Current -----------------------------------------------------------------
   
-  if(is.na(refyear)) refyear=year(Sys.Date())
+  if(is.na(refyear)) refyea=year(Sys.Date())
   refyear.stat= refyear-2
   
   cur<-cfile %>% 
@@ -45,10 +44,10 @@ for(i in 1:length(phenfiles)){
     geom_sf(data=nuts_DE0)+
     geom_sf(data=last5,col="grey70")+
     geom_sf(data=cur,aes(fill=Jultag),shape=21,size=2)+
-    facet_wrap(.~Phase_id,ncol=4)+
+    facet_wrap(.~BBCH_Code,ncol=4)+
     labs(fill="DOY")+
     scale_fill_gradientn(colors=rainbow(100),limits = c(0, 360),breaks=seq(0,360,30))+
-    ggtitle(paste("Observations",refyear),"Sorted by DWD Phase ID")+
+    ggtitle(paste("Observations",refyear),"Sorted by approx. BBCH Phase")+
     theme(panel.border=element_blank(),
           panel.grid = element_blank(),
           axis.text.x= element_blank(),
@@ -82,11 +81,11 @@ for(i in 1:length(phenfiles)){
     geom_sf(data=nuts_DE0)+
     geom_sf(data=last5,col="grey70")+
     geom_sf(data=jn,aes(fill=Diff),shape=21,size=2)+
-    facet_wrap(.~Phase_id,ncol=4)+
+    facet_wrap(.~BBCH_Code,ncol=4)+
     labs(fill="Days Difference")+
     scale_fill_gradientn(colors=c("Blue","Darkgreen","Green","Yellow","Orange","Red","Darkred"),
                          limits=c(-50,50),breaks=seq(-50,50,10))+
-    ggtitle("Difference to MTA", "Sorted by DWD Phase ID")+
+    ggtitle("Difference to MTA", "Sorted by approx. BBCH Phase")+
     theme(panel.border=element_blank(),
           panel.grid = element_blank(),
           axis.text.x= element_blank(),
@@ -96,20 +95,20 @@ for(i in 1:length(phenfiles)){
   
   # Distribution -------------------------------------------------------------------
   
-  dist <- cfile %>% 
+  distr <- cfile %>% 
     filter(Referenzjahr>=refyear.mta) %>%
     mutate(year=as.character(Referenzjahr))
   
-  if(nrow(dist)<1) next
+  if(nrow(distr)<1) next
   
-  g3<-ggplot(dist,aes(x=Jultag,fill=NewPhase))+ theme_light()+
+  g3<-ggplot(distr,aes(x=Jultag,fill=NewPhase))+ theme_light()+
     geom_bar()+
     facet_wrap(.~Referenzjahr)+
     xlab("DOY")+
     ylab("Count")+
     ggtitle(paste("DWD Phenology -",unique(cur$Croptype)),
             paste("With Data until", unique(max(cur$Eintrittsdatum))))+
-    labs(fill="<PhaseID>-<Phase DE>")+
+    labs(fill="<BBCH>-<Phase DE>")+
     theme(plot.title = element_text(size = 20, face = "bold"))+
     scale_x_continuous(limits=c(0,360),breaks=seq(0,360,30))+
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
