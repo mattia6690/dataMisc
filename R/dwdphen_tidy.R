@@ -85,26 +85,14 @@ for(i in 1:nrow(meta)) write.csv(meta$data[[i]],meta$Output[[i]], row.names = FA
 # TimeSeries --------------------------------------------------------------------
 # Tidy the timeseries
 dwd.phen2<-dwd.phen %>% 
-  select(reporter,Type1,Type2,Output) %>% 
-  nest(dataRaw=c(reporter,Output))
+  select(Type1,Type2,reporter,Output) %>% 
+  nest(dataRaw=-c(Type1,Type2))
 
-# Download the timeseries
+# Read the dataset
 for(i in 1:nrow(dwd.phen2)) {
   
   # Read
   l<-lapply(dwd.phen2$dataRaw[[i]]$Output, function(x) read.table(x, sep=";", header=TRUE))
-  
-  l<-lapply(dwd.phen2$dataRaw[[i]], function(x){
-    
-    tab<-read.table(x$Output, sep=";", header=TRUE)
-    tab$reporter=x$reporter
-    
-    return(tab)
-    
-  } )
-  
-  
-  l<-lapply(dwd.phen2$dataRaw,print)
   
   
   #l<-suppressMessages(lapply(dwd.phen2$dataRaw[[i]]$Output, read_csv2))
