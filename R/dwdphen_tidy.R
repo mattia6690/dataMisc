@@ -1,5 +1,32 @@
 # Tidy the downloaded DWD data
 library("tidyverse")
+download_and_format_dwd<-function(url){
+  
+  # 2. Read lines with correct encoding and drop blanks
+  lines <- read_lines(url, locale = locale(encoding = "Latin1")) %>% 
+    paste(.,collapse="") %>% 
+    str_replace_all(.,"  ","") %>%
+    str_replace_all(.,"\t","") %>% 
+    str_replace_all(.,"; ",";") %>% 
+    str_replace_all(.," ;",";")
+    
+  
+  fields <- str_split(lines, ";")[[1]]
+  afterheader<-which(!is.na(as.numeric(fields)))[1]
+  columns <- fields[1:(afterheader-1)]
+  
+  data_fields <- fields[-(1:length(columns))] 
+  data_fields <- data_fields[-length(data_fields)]# remove header
+  n_cols <- length(columns)
+  
+  # 5. Break into rows (every 8 fields == 1 record)
+  rows <- matrix(data_fields, ncol = n_cols, byrow = TRUE)
+  colnames(rows) =columns
+  rowstib<-as_tibble(rows) %>% type_convert()
+  
+  return(rowstib)
+  
+}
 
 dwd.phen<-readRDS("DWDdata/Phenology/DWDphentable.rds")
 # Metadata ----------------------------------------------------------------
@@ -22,14 +49,18 @@ meta<-bind_rows(meta.crops,meta.fruit) %>%
 
 for(i in 1:nrow(meta)){
   
-  tib<-as_tibble(read.table(meta$L2_URL[[i]], sep=";", header=TRUE))
-  tib2<-tib %>% 
-    mutate_if(is.character, trimws) %>% 
-    mutate_if(is.character, ~str_replace_all(., "<fc>", "ü")) %>% 
-    mutate_if(is.character, ~str_replace_all(., "<e4>", "ä")) %>% 
-    mutate_if(is.character, ~str_replace_all(., "<f6>", "ö")) %>% 
-    mutate_if(is.character, ~str_replace_all(., "<c4>", "Ä")) %>% 
-    mutate_if(is.character, ~str_replace_all(., "<df>", "ss"))
+  # tib<-as_tibble(read.table(meta$L2_URL[i], sep=";",header=T,fill=T))
+  # tib2<-tib %>% 
+  #   mutate_if(is.character, utf8::utf8_encode) %>% 
+  #   mutate_if(is.character, trimws) %>% 
+  #   mutate_if(is.character, ~str_replace_all(., "<fc>", "ü")) %>% 
+  #   mutate_if(is.character, ~str_replace_all(., "<e4>", "ä")) %>% 
+  #   mutate_if(is.character, ~str_replace_all(., "<f6>", "ö")) %>% 
+  #   mutate_if(is.character, ~str_replace_all(., "<c4>", "Ä")) %>% 
+  #   mutate_if(is.character, ~str_replace_all(., "<df>", "ss"))
+  # 
+  
+  tib2<-download_and_format_dwd(meta$L2_URL[i])
   
   
   if(meta$Type2[[i]]=="Stations") {
